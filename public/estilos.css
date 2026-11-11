@@ -1072,3 +1072,113 @@ main { padding: 28px; }
   .usuario { align-items: flex-start; }
   .login__tarjeta { padding: 22px 18px; }
 }
+
+/* ---------------------------------------------------- crear varios usuarios */
+.modal--ancho { width: min(860px, calc(100vw - 32px)); }
+.modal--ancho .tarjeta__cabeza { flex-direction: column; align-items: flex-start; gap: 4px; }
+.modal--ancho .tarjeta__cabeza .sub { margin: 0; }
+
+.lote { display: grid; gap: 6px; }
+
+.lote__cabeza,
+.lote__fila {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 1.2fr) 140px 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.lote__cabeza {
+  font-size: .76rem;
+  font-weight: 600;
+  color: var(--texto-2);
+  padding: 0 0 2px 26px;
+}
+.lote__cabeza b { color: var(--peligro); font-weight: 600; }
+
+.lote__filas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  counter-reset: fila;
+}
+
+.lote__item { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; }
+.lote__item::before {
+  counter-increment: fila;
+  content: counter(fila);
+  font-size: .74rem;
+  color: var(--texto-3);
+  text-align: right;
+  padding-top: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lote__fila input,
+.lote__fila select {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  background: var(--superficie);
+  color: var(--texto);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-chico);
+  font: inherit;
+  font-size: .9rem;
+}
+.lote__fila input::placeholder { color: var(--texto-3); }
+.lote__fila input:focus,
+.lote__fila select:focus { outline: none; border-color: var(--acento); box-shadow: var(--foco); }
+.lote__fila .invalido { border-color: var(--peligro); }
+
+.lote__error {
+  grid-column: 1 / -1;
+  font-size: .78rem;
+  color: var(--peligro);
+}
+.lote__error:empty { display: none; }
+
+.lote__agregar { justify-self: start; margin-left: 22px; }
+
+.acciones__info { margin-right: auto; align-self: center; font-size: .82rem; color: var(--texto-3); }
+
+@media (max-width: 720px) {
+  .lote__cabeza { display: none; }
+  .lote__fila { grid-template-columns: 1fr 1fr; }
+  .lote__fila > :first-child { grid-column: 1 / -1; }
+  .lote__item { padding-bottom: 8px; border-bottom: 1px solid var(--borde); }
+  .lote__agregar { margin-left: 0; }
+}
+
+/* ---------------------------------------------------- filtro por trabajador (solo administrador) */
+.filtro-trabajador {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 2px 0 8px;
+}
+.filtro-trabajador svg {
+  position: absolute;
+  left: 10px;
+  color: var(--texto-3);
+  pointer-events: none;
+}
+.filtro-trabajador select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px 0 32px;
+  background: var(--superficie);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  font: inherit;
+  font-size: .85rem;
+  cursor: pointer;
+}
+.filtro-trabajador select:hover { border-color: var(--borde-fuerte); }
+.filtro-trabajador select:focus { outline: none; border-color: var(--acento); box-shadow: var(--foco); }
+.filtro-trabajador.activo select { border-color: var(--acento); background: var(--acento-suave); color: var(--acento); font-weight: 600; }

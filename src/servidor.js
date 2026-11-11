@@ -41,14 +41,14 @@ const numeroCaso = (id, fecha) => `${String(fecha || new Date().getFullYear()).s
 const normalizar = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
 class ErrorUsuario extends Error {
-  constructor(mensaje, estado = 400) { super(mensaje); this.estado = estado; }
+  constructor(mensaje, estado = 400, extra = null) { super(mensaje); this.estado = estado; this.extra = extra; }
 }
 
 const manejar = (fn) => async (req, res, next) => {
   try {
     await fn(req, res, next);
   } catch (e) {
-    if (e instanceof ErrorUsuario) return res.status(e.estado).json({ error: e.message });
+    if (e instanceof ErrorUsuario) return res.status(e.estado).json({ error: e.message, ...e.extra });
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
       if (e.code === "P2025") return res.status(404).json({ error: "No encontrado" });
       if (e.code === "P2002") return res.status(409).json({ error: "Ese registro ya existe." });
@@ -136,20 +136,62 @@ app.get("/api/usuarios", auth.requiereAdmin, manejar(async (_req, res) => {
   res.json(lista.map(auth.publico));
 }));
 
-app.post("/api/usuarios", auth.requiereAdmin, manejar(async (req, res) => {
-  const b = req.body || {};
+// valida los datos de un usuario nuevo; devuelve { datos } o { error }
+function nuevoUsuario(b = {}) {
   const nombre = texto(b.nombre);
   const cedula = texto(b.cedula);
-  const usuario = (texto(b.usuario) || cedula).toLowerCase();
+  const usuario = (texto(b.usuario) || cedula || "").toLowerCase();
   const rol = ROLES.includes(b.rol) ? b.rol : "TRABAJADOR";
   const clave = String(b.clave || cedula || "");
-  if (!nombre || !usuario) throw new ErrorUsuario("El nombre y el usuario (o la cédula) son obligatorios.");
-  if (!/^[a-z0-9._-]{3,40}$/.test(usuario)) throw new ErrorUsuario("El usuario solo puede tener letras, números, punto, guion o guion bajo (3 a 40).");
-  if (clave.length < 4) throw new ErrorUsuario("La contraseña inicial debe tener al menos 4 caracteres.");
-  const u = await prisma.usuario.create({
-    data: { nombre, cedula, usuario, rol, claveHash: auth.hashClave(clave), debeCambiarClave: true },
+  if (!nombre || !usuario) return { error: "El nombre y el usuario (o la cédula) son obligatorios." };
+  if (!/^[a-z0-9._-]{3,40}$/.test(usuario)) return { error: "El usuario solo puede tener letras, números, punto, guion o guion bajo (3 a 40)." };
+  if (clave.length < 4) return { error: "La contraseña inicial debe tener al menos 4 caracteres." };
+  return { datos: { nombre, cedula, usuario, rol, clave } };
+}
+
+const crearUsuario = ({ clave, ...d }) =>
+  prisma.usuario.create({ data: { ...d, claveHash: auth.hashClave(clave), debeCambiarClave: true } });
+
+app.post("/api/usuarios", auth.requiereAdmin, manejar(async (req, res) => {
+  const { datos, error } = nuevoUsuario(req.body);
+  if (error) throw new ErrorUsuario(error);
+  res.status(201).json(auth.publico(await crearUsuario(datos)));
+}));
+
+// crea varios usuarios a la vez: se guardan todos o ninguno
+const MAX_LOTE = 50;
+app.post("/api/usuarios/lote", auth.requiereAdmin, manejar(async (req, res) => {
+  const filas = Array.isArray(req.body?.usuarios) ? req.body.usuarios : [];
+  if (!filas.length) throw new ErrorUsuario("Agregue al menos un usuario.");
+  if (filas.length > MAX_LOTE) throw new ErrorUsuario(`Máximo ${MAX_LOTE} usuarios por vez.`);
+
+  const errores = [];
+  const validos = filas.map((f, i) => {
+    const r = nuevoUsuario(f);
+    if (r.error) errores.push({ fila: i, error: r.error });
+    return r.datos;
   });
-  res.status(201).json(auth.publico(u));
+
+  // usuarios repetidos dentro de la misma lista o que ya existen
+  const vistos = new Map();
+  validos.forEach((d, i) => {
+    if (!d) return;
+    if (vistos.has(d.usuario)) errores.push({ fila: i, error: `El usuario «${d.usuario}» está repetido en la lista.` });
+    else vistos.set(d.usuario, i);
+  });
+  const existentes = await prisma.usuario.findMany({
+    where: { usuario: { in: [...vistos.keys()] } }, select: { usuario: true },
+  });
+  for (const { usuario } of existentes) {
+    errores.push({ fila: vistos.get(usuario), error: `El usuario «${usuario}» ya existe.` });
+  }
+
+  if (errores.length) {
+    errores.sort((a, b) => a.fila - b.fila);
+    throw new ErrorUsuario(`Revise ${errores.length === 1 ? "la fila marcada" : "las filas marcadas"}; no se guardó ninguno.`, 400, { filas: errores });
+  }
+  const creados = await prisma.$transaction(validos.map(crearUsuario));
+  res.status(201).json(creados.map(auth.publico));
 }));
 
 app.put("/api/usuarios/:id", auth.requiereAdmin, manejar(async (req, res) => {
@@ -201,6 +243,7 @@ const RECURSOS = {
       id: f.id, caso: f.caso || "", fecha_hora: f.fechaHora, nombre: f.nombre, cedula: f.cedula,
       programa: f.programa, solicitud: f.solicitud, respuesta: f.respuesta,
       observacion: f.observacion, resuelto: f.resuelto, atendio: f.usuario?.nombre || "",
+      usuarioId: f.usuarioId,
     }),
   },
   respuestas: {
@@ -258,9 +301,27 @@ app.get("/api/siguiente-caso", manejar(async (_req, res) => {
   res.json({ caso: numeroCaso(Number(fila?.ultimo ?? 0) + 1) });
 }));
 
+// Llamadas que puede ver quien consulta: el trabajador solo las suyas; el administrador todas,
+// o las de un trabajador si pide ?trabajador=<id> (o ?trabajador=sin para las que no tienen dueño).
+function filtroLlamadas(req) {
+  if (req.usuario.rol !== "ADMIN") return { usuarioId: req.usuario.id };
+  const t = String(req.query.trabajador || "");
+  if (t === "sin") return { usuarioId: null };
+  if (/^\d+$/.test(t)) return { usuarioId: Number(t) };
+  return {};
+}
+
+// en llamadas, un trabajador solo puede modificar o borrar las que él registró
+async function verificarDueno(req, id) {
+  if (req.params.recurso !== "llamadas" || req.usuario.rol === "ADMIN") return;
+  const propia = await prisma.llamada.findFirst({ where: { id, usuarioId: req.usuario.id }, select: { id: true } });
+  if (!propia) throw new ErrorUsuario("No encontrado", 404);
+}
+
 app.get("/api/:recurso", manejar(async (req, res) => {
   const cfg = recurso(req);
-  const filas = await cfg.modelo().findMany({ orderBy: cfg.orden, include: cfg.incluir });
+  const where = req.params.recurso === "llamadas" ? filtroLlamadas(req) : undefined;
+  const filas = await cfg.modelo().findMany({ where, orderBy: cfg.orden, include: cfg.incluir });
   res.json(filas.map(cfg.aJSON));
 }));
 
@@ -288,6 +349,7 @@ async function actualizar(req, res, parcial) {
   const cfg = recurso(req);
   const id = idDe(req);
   const datos = limpiar(cfg, req.body, parcial);
+  await verificarDueno(req, id);
   if (req.params.recurso === "programas") await verificarProgramaUnico(datos.nombre, id);
   const fila = await cfg.modelo().update({ where: { id }, data: datos, include: cfg.incluir });
   res.json(cfg.aJSON(fila));
@@ -297,16 +359,18 @@ app.patch("/api/:recurso/:id", manejar((req, res) => actualizar(req, res, true))
 
 app.delete("/api/:recurso/:id", manejar(async (req, res) => {
   const cfg = recurso(req);
-  await cfg.modelo().delete({ where: { id: idDe(req) } });
+  const id = idDe(req);
+  await verificarDueno(req, id);
+  await cfg.modelo().delete({ where: { id } });
   res.json({ ok: true });
 }));
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "No encontrado" }));
 
 // ------------------------------------------------------------------ exportar a Excel
-app.get("/exportar", manejar(async (_req, res) => {
+app.get("/exportar", manejar(async (req, res) => {
   const [llamadas, respuestas, programas] = await Promise.all([
-    prisma.llamada.findMany({ orderBy: RECURSOS.llamadas.orden, include: RECURSOS.llamadas.incluir }),
+    prisma.llamada.findMany({ where: filtroLlamadas(req), orderBy: RECURSOS.llamadas.orden, include: RECURSOS.llamadas.incluir }),
     prisma.respuesta.findMany({ orderBy: { pregunta: "asc" } }),
     prisma.programa.findMany({ orderBy: { nombre: "asc" } }),
   ]);

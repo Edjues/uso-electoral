@@ -32,7 +32,7 @@
       location.replace("/login");
       throw new Error(datos.error || "Debe iniciar sesión.");
     }
-    if (!res.ok) throw new Error(datos.error || `Error del servidor (${res.status})`);
+    if (!res.ok) throw Object.assign(new Error(datos.error || `Error del servidor (${res.status})`), { datos });
     return datos;
   }
 
@@ -486,12 +486,46 @@
   // ============================================================ lista de llamadas
   async function cargarLlamadas() {
     estado.llamadas = await api("/api/llamadas");
+    pintarFiltroTrabajador();
     pintarLlamadas();
   }
 
+  // ---- filtro por trabajador (solo administrador). "" = todos, "sin" = sin asignar, o el id
+  const esAdmin = () => estado.yo?.rol === "ADMIN";
+  estado.trabajador = "";
+
+  const delTrabajador = (ll) =>
+    !estado.trabajador ? true : estado.trabajador === "sin" ? ll.usuarioId == null : String(ll.usuarioId) === estado.trabajador;
+
+  function pintarFiltroTrabajador() {
+    if (!esAdmin()) return;
+    const sel = $("#sel-trabajador");
+    const cuenta = new Map();
+    for (const ll of estado.llamadas) cuenta.set(ll.usuarioId ?? "sin", (cuenta.get(ll.usuarioId ?? "sin") || 0) + 1);
+    const opcion = (valor, texto) => { const o = el("option", null, texto); o.value = valor; return o; };
+    const opciones = [opcion("", `Todos los trabajadores (${estado.llamadas.length})`)];
+    for (const u of [...estado.usuarios].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))) {
+      opciones.push(opcion(String(u.id), `${u.nombre}${u.activo ? "" : " (inactivo)"} · ${cuenta.get(u.id) || 0}`));
+    }
+    if (cuenta.get("sin")) opciones.push(opcion("sin", `Sin asignar · ${cuenta.get("sin")}`));
+    sel.replaceChildren(...opciones);
+    // si el elegido ya no existe, volver a "todos"
+    if (!opciones.some((o) => o.value === estado.trabajador)) estado.trabajador = "";
+    sel.value = estado.trabajador;
+    $("#filtro-trabajador").hidden = false;
+    $("#filtro-trabajador").classList.toggle("activo", !!estado.trabajador);
+    $("#btn-exportar").href = "/exportar" + (estado.trabajador ? "?trabajador=" + encodeURIComponent(estado.trabajador) : "");
+  }
+  $("#sel-trabajador").addEventListener("change", (e) => {
+    estado.trabajador = e.target.value;
+    pintarFiltroTrabajador();
+    pintarLlamadas();
+  });
+
   function pintarLlamadas() {
     const q = terminosLibres($("#buscar-llamadas").value);
-    const coinciden = estado.llamadas.filter((ll) => {
+    const base = estado.llamadas.filter(delTrabajador);
+    const coinciden = base.filter((ll) => {
       if (!q.length) return true;
       const texto = normalizar([ll.caso, ll.nombre, ll.cedula, ll.programa, ll.solicitud, ll.respuesta, ll.observacion].join(" "));
       return q.every((p) => texto.includes(p));
@@ -536,12 +570,14 @@
     );
 
     const pendientes = coinciden.filter((l) => !l.resuelto).length;
-    $("#contador-llamadas").textContent = estado.llamadas.length;
+    $("#contador-llamadas").textContent = base.length;
     $("#n-pendientes").textContent = pendientes;
     $("#n-resueltos").textContent = coinciden.length - pendientes;
     const vacio = $("#vacio-llamadas");
     vacio.hidden = visibles.length > 0;
-    vacio.textContent = estado.llamadas.length ? "No hay llamadas que coincidan." : "Aún no hay llamadas registradas.";
+    vacio.textContent = base.length ? "No hay llamadas que coincidan."
+      : estado.trabajador ? "Este trabajador no tiene llamadas registradas."
+      : "Aún no hay llamadas registradas.";
   }
 
   $("#buscar-llamadas").addEventListener("input", pintarLlamadas);
@@ -762,6 +798,7 @@
     try {
       estado.usuarios = await api("/api/usuarios");
       pintarUsuarios();
+      pintarFiltroTrabajador();
     } catch (err) { aviso(err.message, "error"); }
   }
 
@@ -833,7 +870,121 @@
     modalUsuario.showModal();
     $("#u-nombre").focus();
   }
-  $("#btn-nuevo-usuario").addEventListener("click", () => abrirModalUsuario());
+  // ---- crear varios usuarios a la vez
+  const modalLote = $("#modal-lote");
+  const filasLote = $("#lote-filas");
+  const MAX_LOTE = 50;
+
+  function entrada(nombre, placeholder, extra = {}) {
+    const i = el("input");
+    Object.assign(i, { name: nombre, placeholder, autocomplete: "off", ...extra });
+    i.setAttribute("aria-label", placeholder);
+    i.addEventListener("input", () => {
+      i.classList.remove("invalido");
+      const error = i.closest(".lote__fila")?.querySelector(".lote__error");
+      if (error) error.textContent = "";
+      contarLote();
+    });
+    return i;
+  }
+
+  function agregarFilaLote(enfocar = true) {
+    if (filasLote.children.length >= MAX_LOTE) { aviso(`Máximo ${MAX_LOTE} usuarios por vez`, "error"); return; }
+    const nombre = entrada("nombre", "Nombre completo");
+    const cedula = entrada("cedula", "Cédula", { inputMode: "numeric" });
+    const usuario = entrada("usuario", "Igual a la cédula", { autocapitalize: "off", spellcheck: false });
+    usuario.setAttribute("aria-label", "Usuario (opcional)");
+    const rol = el("select");
+    rol.name = "rol";
+    rol.setAttribute("aria-label", "Rol");
+    for (const [valor, texto] of [["TRABAJADOR", "Trabajador"], ["ADMIN", "Administrador"]]) {
+      const o = el("option", null, texto);
+      o.value = valor;
+      rol.append(o);
+    }
+    const quitar = iconoBoton("borrar", "Quitar fila", () => {
+      li.remove();
+      if (!filasLote.children.length) agregarFilaLote();
+      contarLote();
+    });
+    const li = el("li", "lote__item", el("div", "lote__fila", [nombre, cedula, usuario, rol, quitar, el("div", "lote__error")]));
+    filasLote.append(li);
+    contarLote();
+    if (enfocar) { nombre.focus(); li.scrollIntoView({ block: "nearest" }); }
+  }
+
+  const valoresFila = (li) => Object.fromEntries($$("input, select", li).map((c) => [c.name, c.value.trim()]));
+  const filaVacia = (v) => !v.nombre && !v.cedula && !v.usuario;
+
+  function contarLote() {
+    const n = $$(".lote__item", filasLote).filter((li) => !filaVacia(valoresFila(li))).length;
+    $("#lote-info").textContent = n ? `${n} usuario(s) por guardar` : "";
+  }
+
+  function abrirModalLote() {
+    filasLote.replaceChildren();
+    agregarFilaLote(false);
+    agregarFilaLote(false);
+    agregarFilaLote(false);
+    modalLote.showModal();
+    $("input", filasLote).focus();
+  }
+  $("#btn-nuevo-usuario").addEventListener("click", abrirModalLote);
+  $("#btn-lote-fila").addEventListener("click", () => agregarFilaLote());
+
+  // Enter pasa al siguiente campo; en el último de la última fila agrega otra fila
+  filasLote.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.target.tagName !== "INPUT") return;
+    e.preventDefault();
+    const campos = $$("input", filasLote);
+    const i = campos.indexOf(e.target);
+    if (i === campos.length - 1) agregarFilaLote();
+    else campos[i + 1].focus();
+  });
+
+  $("#form-lote").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const items = $$(".lote__item", filasLote);
+    items.forEach((li) => { $$(".invalido", li).forEach((c) => c.classList.remove("invalido")); $(".lote__error", li).textContent = ""; });
+
+    // las filas totalmente vacías se ignoran
+    const conDatos = items.map((li) => ({ li, v: valoresFila(li) })).filter((f) => !filaVacia(f.v));
+    if (!conDatos.length) { aviso("Escriba al menos un usuario", "error"); $("input", filasLote).focus(); return; }
+
+    let primero = null;
+    for (const { li, v } of conDatos) {
+      const faltan = [!v.nombre && "nombre", !v.cedula && "cedula"].filter(Boolean);
+      faltan.forEach((n) => li.querySelector(`[name=${n}]`).classList.add("invalido"));
+      if (faltan.length) {
+        $(".lote__error", li).textContent = "Falta " + faltan.map((n) => (n === "cedula" ? "la cédula" : "el nombre")).join(" y ");
+        primero ??= li.querySelector(".invalido");
+      }
+    }
+    if (primero) { aviso("Complete las filas marcadas", "error"); primero.focus(); return; }
+
+    const boton = $("#btn-lote-guardar");
+    boton.disabled = true;
+    try {
+      const creados = await api("/api/usuarios/lote", { method: "POST", body: { usuarios: conDatos.map((f) => f.v) } });
+      modalLote.close();
+      aviso(`${creados.length} usuario(s) creado(s)`, "exito");
+      await cargarUsuarios();
+    } catch (err) {
+      for (const { fila, error } of err.datos?.filas || []) {
+        const li = conDatos[fila]?.li;
+        if (!li) continue;
+        $(".lote__error", li).textContent = error;
+        const v = conDatos[fila].v;
+        const campo = !v.nombre ? "nombre" : /usuario/i.test(error) ? (v.usuario ? "usuario" : "cedula") : "nombre";
+        li.querySelector(`[name=${campo}]`).classList.add("invalido");
+        primero ??= li;
+      }
+      primero?.scrollIntoView({ block: "nearest" });
+      aviso(err.message, "error");
+    } finally {
+      boton.disabled = false;
+    }
+  });
 
   formUsuario.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -878,6 +1029,10 @@
       return;
     }
     pintarUsuarioActual(yo);
+    if (yo.rol !== "ADMIN") {
+      $("#titulo-llamadas").textContent = "Mis llamadas";
+      $("#btn-exportar").title = "Descargar mis llamadas en Excel";
+    }
 
     let vistaInicial = "registro";
     try { vistaInicial = localStorage.getItem("vista") || "registro"; } catch (_) { /* nada */ }
@@ -885,7 +1040,7 @@
     mostrarVista(permitidas.includes(vistaInicial) ? vistaInicial : "registro");
 
     try {
-      await Promise.all([cargarLlamadas(), cargarRespuestas(), cargarProgramas()]);
+      await Promise.all([cargarLlamadas(), cargarRespuestas(), cargarProgramas(), cargarUsuarios()]);
     } catch (err) {
       alerta(err.message);
     }

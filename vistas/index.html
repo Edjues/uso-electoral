@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Registro de llamadas</title>
-  <link rel="stylesheet" href="estilos.css?v=4">
+  <link rel="stylesheet" href="estilos.css?v=6">
 </head>
 <body>
   <div id="alerta-servidor" class="alerta" hidden></div>
@@ -23,7 +23,7 @@
       <button type="button" class="pestana" role="tab" data-vista="usuarios" aria-selected="false" id="pestana-usuarios" hidden>Usuarios</button>
     </nav>
 
-    <a class="boton boton--sutil" href="/exportar" title="Descargar todo en Excel">
+    <a class="boton boton--sutil" href="/exportar" id="btn-exportar" title="Descargar en Excel">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
       <span>Exportar Excel</span>
     </a>
@@ -125,7 +125,7 @@
 
         <section class="tarjeta tarjeta--lista">
           <div class="tarjeta__cabeza">
-            <h2>Llamadas registradas</h2>
+            <h2 id="titulo-llamadas">Llamadas registradas</h2>
             <span class="chip" id="contador-llamadas">0</span>
             <button type="button" class="enlace-sutil" id="btn-nueva-llamada" title="Registrar una nueva llamada">+ Nueva</button>
           </div>
@@ -139,6 +139,10 @@
             <button type="button" class="filtro activo" data-filtro="todos">Todas</button>
             <button type="button" class="filtro" data-filtro="pendientes">Pendientes <span id="n-pendientes"></span></button>
             <button type="button" class="filtro" data-filtro="resueltos">Resueltas <span id="n-resueltos"></span></button>
+          </div>
+          <div class="filtro-trabajador" id="filtro-trabajador" hidden>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            <select id="sel-trabajador" aria-label="Filtrar por trabajador"></select>
           </div>
           <ul id="lista-llamadas" class="lista"></ul>
           <p id="vacio-llamadas" class="vacio" hidden></p>
@@ -188,7 +192,7 @@
         </div>
         <div class="resultado-info">
           <span id="info-usuarios"></span>
-          <button type="button" class="enlace-sutil" id="btn-nuevo-usuario">+ Agregar usuario</button>
+          <button type="button" class="enlace-sutil" id="btn-nuevo-usuario">+ Agregar usuarios</button>
         </div>
         <div class="tarjeta tarjeta--tabla">
           <ul id="lista-usuarios" class="usuarios"></ul>
@@ -265,6 +269,32 @@
     </form>
   </dialog>
 
+  <!-- ================================================= MODAL VARIOS USUARIOS -->
+  <dialog id="modal-lote" class="modal modal--ancho">
+    <form id="form-lote" novalidate>
+      <div class="tarjeta__cabeza">
+        <h2>Agregar usuarios</h2>
+        <p class="sub">Agregue las filas que necesite y guarde todo de una vez. Si deja vacío el usuario, se usa la cédula; la contraseña inicial es la cédula y deberán cambiarla al ingresar.</p>
+      </div>
+      <div class="lote">
+        <div class="lote__cabeza" aria-hidden="true">
+          <span>Nombre completo <b>*</b></span>
+          <span>Cédula <b>*</b></span>
+          <span>Usuario</span>
+          <span>Rol</span>
+          <span></span>
+        </div>
+        <ol id="lote-filas" class="lote__filas"></ol>
+        <button type="button" class="enlace-sutil lote__agregar" id="btn-lote-fila">+ Agregar fila</button>
+      </div>
+      <div class="acciones">
+        <span class="acciones__info" id="lote-info"></span>
+        <button type="button" class="boton boton--sutil" data-cerrar>Cancelar</button>
+        <button type="submit" class="boton boton--primario" id="btn-lote-guardar">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- ================================================= MODAL CONTRASEÑA -->
   <dialog id="modal-clave" class="modal modal--chico">
     <form id="form-clave" novalidate>
@@ -293,6 +323,6 @@
 
   <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
