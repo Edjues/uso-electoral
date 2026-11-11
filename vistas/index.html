@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Registro de llamadas</title>
+  <link rel="stylesheet" href="estilos.css?v=4">
+</head>
+<body>
+  <div id="alerta-servidor" class="alerta" hidden></div>
+
+  <header class="barra">
+    <div class="barra__marca">
+      <span class="barra__logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
+      </span>
+      <span class="barra__titulo">Registro de llamadas</span>
+    </div>
+
+    <nav class="pestanas" role="tablist">
+      <button type="button" class="pestana activa" role="tab" data-vista="registro" aria-selected="true">Registrar llamada</button>
+      <button type="button" class="pestana" role="tab" data-vista="respuestas" aria-selected="false">Respuestas</button>
+      <button type="button" class="pestana" role="tab" data-vista="usuarios" aria-selected="false" id="pestana-usuarios" hidden>Usuarios</button>
+    </nav>
+
+    <a class="boton boton--sutil" href="/exportar" title="Descargar todo en Excel">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+      <span>Exportar Excel</span>
+    </a>
+
+    <div class="menu-usuario">
+      <button type="button" class="menu-usuario__boton" id="btn-menu-usuario" aria-haspopup="menu" aria-expanded="false">
+        <span class="avatar" id="avatar-usuario">··</span>
+        <span class="menu-usuario__nombre">
+          <span id="nombre-usuario">…</span>
+          <small id="rol-usuario"></small>
+        </span>
+      </button>
+      <div class="menu-usuario__panel" id="panel-usuario" role="menu" hidden>
+        <button type="button" role="menuitem" id="btn-cambiar-clave">Cambiar contraseña</button>
+        <button type="button" role="menuitem" id="btn-salir" class="peligro">Cerrar sesión</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ================================================= VISTA: REGISTRO -->
+    <section id="vista-registro" class="vista">
+      <div class="rejilla">
+        <form id="form-llamada" class="tarjeta" novalidate autocomplete="off">
+          <div class="tarjeta__cabeza">
+            <h2 id="titulo-form">Nueva llamada</h2>
+            <span id="etiqueta-edicion" class="chip chip--aviso" hidden>Editando</span>
+          </div>
+
+          <div class="campos">
+            <div class="campo">
+              <label for="f-fecha">Hora de la llamada <b>*</b></label>
+              <div class="en-linea">
+                <input id="f-fecha" type="datetime-local" name="fecha_hora" required>
+                <button type="button" class="boton boton--sutil boton--chico" id="btn-ahora" title="Poner la fecha y hora actual">Ahora</button>
+              </div>
+            </div>
+
+            <div class="campo">
+              <span class="campo__etiqueta">Caso N° <em class="auto">automático</em></span>
+              <div class="caso" id="caso-numero">—</div>
+            </div>
+
+            <div class="campo">
+              <label for="f-cedula">Cédula <b>*</b></label>
+              <input id="f-cedula" type="text" name="cedula" inputmode="numeric" required placeholder="Número de documento">
+              <small id="historial-cedula" class="pista" hidden></small>
+            </div>
+
+            <div class="campo">
+              <label for="f-nombre">Nombre completo del solicitante <b>*</b></label>
+              <input id="f-nombre" type="text" name="nombre" required placeholder="Nombres y apellidos">
+            </div>
+
+            <div class="campo campo--ancho">
+              <span class="campo__etiqueta">Programa de donde llama</span>
+              <div class="selector" id="sel-programa" data-nombre="programa" data-placeholder="Seleccione un programa"></div>
+            </div>
+
+            <div class="campo campo--ancho">
+              <span class="campo__etiqueta">Solicitud <b>*</b></span>
+              <div class="selector" id="sel-solicitud" data-nombre="solicitud" data-placeholder="Seleccione el tipo de solicitud"></div>
+            </div>
+
+            <div class="campo campo--ancho">
+              <label for="f-respuesta">Respuesta <em class="auto">automática</em></label>
+              <textarea id="f-respuesta" name="respuesta" rows="3" placeholder="Se completa al elegir la solicitud. Puede modificarla."></textarea>
+              <div id="resolucion-sugerida" class="resolucion" hidden>
+                <span class="resolucion__etiqueta">Resolución relacionada</span>
+                <span id="resolucion-texto"></span>
+              </div>
+            </div>
+
+            <div class="campo campo--ancho">
+              <label for="f-observacion">Observación</label>
+              <textarea id="f-observacion" name="observacion" rows="2" placeholder="Notas adicionales"></textarea>
+            </div>
+
+            <div class="campo campo--ancho">
+              <span class="campo__etiqueta">¿Se resolvió la solicitud?</span>
+              <div class="interruptor" role="radiogroup" id="estado-resuelto">
+                <button type="button" role="radio" class="interruptor__op interruptor__op--pendiente activo" data-valor="0" aria-checked="true">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                  No, queda pendiente
+                </button>
+                <button type="button" role="radio" class="interruptor__op interruptor__op--resuelto" data-valor="1" aria-checked="false">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  Sí, se resolvió
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="acciones">
+            <button type="button" class="boton boton--sutil" id="btn-limpiar">Limpiar</button>
+            <button type="submit" class="boton boton--primario" id="btn-guardar">Guardar llamada</button>
+          </div>
+        </form>
+
+        <section class="tarjeta tarjeta--lista">
+          <div class="tarjeta__cabeza">
+            <h2>Llamadas registradas</h2>
+            <span class="chip" id="contador-llamadas">0</span>
+            <button type="button" class="enlace-sutil" id="btn-nueva-llamada" title="Registrar una nueva llamada">+ Nueva</button>
+          </div>
+          <div class="buscador buscador--chico">
+            <input type="search" id="buscar-llamadas" placeholder="Nombre, cédula, caso, programa…" aria-label="Buscar llamadas">
+            <button type="button" class="buscador__boton" id="btn-buscar-llamadas" aria-label="Buscar">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            </button>
+          </div>
+          <div class="filtros" role="group" aria-label="Filtrar por estado">
+            <button type="button" class="filtro activo" data-filtro="todos">Todas</button>
+            <button type="button" class="filtro" data-filtro="pendientes">Pendientes <span id="n-pendientes"></span></button>
+            <button type="button" class="filtro" data-filtro="resueltos">Resueltas <span id="n-resueltos"></span></button>
+          </div>
+          <ul id="lista-llamadas" class="lista"></ul>
+          <p id="vacio-llamadas" class="vacio" hidden></p>
+        </section>
+      </div>
+    </section>
+
+    <!-- ================================================= VISTA: RESPUESTAS -->
+    <section id="vista-respuestas" class="vista" hidden>
+      <div class="centrado">
+        <div class="encabezado-vista">
+          <div>
+            <h1>Respuestas básicas</h1>
+            <p class="sub">Busque una posible pregunta para ver su respuesta y la resolución relacionada.</p>
+          </div>
+        </div>
+
+        <div class="buscador">
+          <input type="search" id="buscar-respuestas" placeholder="Escriba palabras clave: horario, certificado, plataforma…" aria-label="Buscar respuestas">
+          <button type="button" class="buscador__boton buscador__boton--grande" id="btn-buscar-respuestas">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <span>Buscar</span>
+          </button>
+        </div>
+        <div class="resultado-info">
+          <span id="info-respuestas"></span>
+          <button type="button" class="enlace-sutil" id="btn-nueva-respuesta">+ Agregar respuesta</button>
+        </div>
+
+        <div id="lista-respuestas" class="respuestas"></div>
+        <p id="vacio-respuestas" class="vacio" hidden>No se encontraron respuestas.</p>
+      </div>
+    </section>
+
+    <!-- ================================================= VISTA: USUARIOS (solo admin) -->
+    <section id="vista-usuarios" class="vista" hidden>
+      <div class="centrado">
+        <div class="encabezado-vista">
+          <h1>Usuarios</h1>
+          <p class="sub">Trabajadores que contestan llamadas y administradores. Los usuarios nuevos ingresan con su cédula y deben cambiar la contraseña.</p>
+        </div>
+        <div class="buscador buscador--chico">
+          <input type="search" id="buscar-usuarios" placeholder="Buscar por nombre, cédula o usuario…" aria-label="Buscar usuarios">
+          <button type="button" class="buscador__boton" id="btn-buscar-usuarios" aria-label="Buscar">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          </button>
+        </div>
+        <div class="resultado-info">
+          <span id="info-usuarios"></span>
+          <button type="button" class="enlace-sutil" id="btn-nuevo-usuario">+ Agregar usuario</button>
+        </div>
+        <div class="tarjeta tarjeta--tabla">
+          <ul id="lista-usuarios" class="usuarios"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================================================= MODAL RESPUESTA -->
+  <dialog id="modal-respuesta" class="modal">
+    <form id="form-respuesta" novalidate>
+      <div class="tarjeta__cabeza">
+        <h2 id="titulo-modal">Nueva respuesta</h2>
+      </div>
+      <div class="campo">
+        <label for="m-pregunta">Posible pregunta / tipo de solicitud <b>*</b></label>
+        <textarea id="m-pregunta" name="pregunta" rows="2" required></textarea>
+      </div>
+      <div class="campo">
+        <label for="m-respuesta">Posible respuesta <b>*</b></label>
+        <textarea id="m-respuesta" name="respuesta" rows="4" required></textarea>
+      </div>
+      <div class="campo">
+        <label for="m-resolucion">Posible resolución relacionada</label>
+        <textarea id="m-resolucion" name="resolucion" rows="3"></textarea>
+      </div>
+      <div class="acciones">
+        <button type="button" class="boton boton--sutil" id="btn-cancelar-modal">Cancelar</button>
+        <button type="submit" class="boton boton--primario">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ================================================= MODAL USUARIO -->
+  <dialog id="modal-usuario" class="modal">
+    <form id="form-usuario" novalidate>
+      <div class="tarjeta__cabeza">
+        <h2 id="titulo-modal-usuario">Nuevo usuario</h2>
+      </div>
+      <div class="campo">
+        <label for="u-nombre">Nombre completo <b>*</b></label>
+        <input id="u-nombre" name="nombre" required>
+      </div>
+      <div class="campos">
+        <div class="campo">
+          <label for="u-cedula">Cédula</label>
+          <input id="u-cedula" name="cedula" inputmode="numeric">
+        </div>
+        <div class="campo">
+          <label for="u-usuario">Usuario <b>*</b></label>
+          <input id="u-usuario" name="usuario" autocapitalize="off" spellcheck="false" placeholder="Por defecto, la cédula">
+        </div>
+      </div>
+      <div class="campo">
+        <span class="campo__etiqueta">Rol</span>
+        <div class="interruptor" role="radiogroup" id="u-rol">
+          <button type="button" role="radio" class="interruptor__op interruptor__op--rol" data-valor="TRABAJADOR">Trabajador</button>
+          <button type="button" role="radio" class="interruptor__op interruptor__op--rol" data-valor="ADMIN">Administrador</button>
+        </div>
+      </div>
+      <div class="campo" id="u-campo-clave">
+        <label for="u-clave">Contraseña inicial</label>
+        <input id="u-clave" name="clave" placeholder="Si la deja vacía, será la cédula">
+        <small class="ayuda">La persona deberá cambiarla al ingresar por primera vez.</small>
+      </div>
+      <label class="casilla" id="u-campo-activo">
+        <input type="checkbox" name="activo" id="u-activo">
+        <span>Usuario activo (puede ingresar)</span>
+      </label>
+      <div class="acciones">
+        <button type="button" class="boton boton--sutil" data-cerrar>Cancelar</button>
+        <button type="submit" class="boton boton--primario">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ================================================= MODAL CONTRASEÑA -->
+  <dialog id="modal-clave" class="modal modal--chico">
+    <form id="form-clave" novalidate>
+      <div class="tarjeta__cabeza">
+        <h2 id="titulo-modal-clave">Cambiar contraseña</h2>
+      </div>
+      <p class="sub" id="texto-modal-clave" hidden></p>
+      <div class="campo" id="k-campo-actual">
+        <label for="k-actual">Contraseña actual</label>
+        <input id="k-actual" name="actual" type="password" autocomplete="current-password">
+      </div>
+      <div class="campo">
+        <label for="k-nueva" id="k-etiqueta-nueva">Nueva contraseña</label>
+        <input id="k-nueva" name="nueva" type="password" autocomplete="new-password">
+      </div>
+      <div class="campo" id="k-campo-repetir">
+        <label for="k-repetir">Repita la nueva contraseña</label>
+        <input id="k-repetir" name="repetir" type="password" autocomplete="new-password">
+      </div>
+      <div class="acciones">
+        <button type="button" class="boton boton--sutil" data-cerrar>Cancelar</button>
+        <button type="submit" class="boton boton--primario">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
+
+  <script src="app.js?v=4"></script>
+</body>
+</html>

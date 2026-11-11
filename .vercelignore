@@ -1,0 +1,7 @@
+.env
+.env.*
+!.env.example
+*.db
+servidor.py
+__pycache__/
+iniciar.bat

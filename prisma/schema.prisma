@@ -1,0 +1,94 @@
+// Esquema de la base de datos (Supabase / PostgreSQL)
+// Después de cambiarlo, ejecute:  npm run db:push
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"] // "native" = este PC; rhel = servidores de Vercel
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // conexión con pooler (puerto 6543) — la usa la aplicación
+  directUrl = env("DIRECT_URL")   // conexión directa (puerto 5432) — la usa Prisma para crear tablas
+}
+
+model Llamada {
+  id          Int      @id @default(autoincrement())
+  caso        String?  @unique // se asigna automáticamente: AÑO-0001
+  fechaHora   String   @map("fecha_hora") // formato 2026-11-11T14:30 (hora local de la llamada)
+  nombre      String
+  cedula      String
+  programa    String   @default("")
+  solicitud   String
+  respuesta   String   @default("")
+  observacion String   @default("")
+  resuelto    Boolean  @default(false)
+  usuarioId   Int?     @map("usuario_id") // trabajador que atendió la llamada
+  usuario     Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  creado      DateTime @default(now())
+  actualizado DateTime @updatedAt
+
+  @@index([cedula])
+  @@map("llamadas")
+}
+
+enum Rol {
+  ADMIN
+  TRABAJADOR
+}
+
+model Usuario {
+  id               Int       @id @default(autoincrement())
+  usuario          String    @unique // nombre de ingreso (para trabajadores, la cédula)
+  nombre           String
+  cedula           String    @default("")
+  rol              Rol       @default(TRABAJADOR)
+  claveHash        String    @map("clave_hash")
+  debeCambiarClave Boolean   @default(true) @map("debe_cambiar_clave")
+  activo           Boolean   @default(true)
+  ultimoIngreso    DateTime? @map("ultimo_ingreso")
+  creado           DateTime  @default(now())
+  sesiones         Sesion[]
+  llamadas         Llamada[]
+
+  @@map("usuarios")
+}
+
+model Sesion {
+  id        String   @id // huella SHA-256 del token (el token real solo vive en la cookie)
+  usuarioId Int      @map("usuario_id")
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  expira    DateTime
+  creado    DateTime @default(now())
+
+  @@index([usuarioId])
+  @@map("sesiones")
+}
+
+// Intentos fallidos de ingreso (en la base de datos para que funcione con varias instancias en Vercel)
+model IntentoIngreso {
+  clave          String    @id // ip|usuario
+  fallos         Int       @default(0)
+  bloqueadoHasta DateTime? @map("bloqueado_hasta")
+  actualizado    DateTime  @updatedAt
+
+  @@map("intentos_ingreso")
+}
+
+model Respuesta {
+  id         Int      @id @default(autoincrement())
+  pregunta   String
+  respuesta  String
+  resolucion String   @default("")
+  creado     DateTime @default(now())
+
+  @@map("respuestas")
+}
+
+model Programa {
+  id     Int      @id @default(autoincrement())
+  nombre String   @unique
+  creado DateTime @default(now())
+
+  @@map("programas")
+}
