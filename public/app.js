@@ -537,14 +537,17 @@
       $("#censo-icono").replaceChildren(svg(r.habilitado ? ICONO_SI : ICONO_NO));
       $("#censo-titulo").textContent = r.habilitado ? "Habilitado para votar" : "No aparece en el censo";
       $("#censo-detalle").textContent = r.habilitado
-        ? `El documento ${r.documento} está en el censo electoral.`
+        ? (r.nombre ? `${r.documento} · ${r.nombre}` : `El documento ${r.documento} está en el censo electoral.`)
         : `El documento ${r.documento} no está en la lista. Verifique que esté bien escrito.`;
+      const extra = [r.titulo, r.fechaGrado && "Grado: " + r.fechaGrado.split("-").reverse().join("/")].filter(Boolean).join(" · ");
+      $("#censo-extra").textContent = r.habilitado ? extra : "";
+      $("#censo-extra").hidden = !(r.habilitado && extra);
       $("#btn-censo-registrar").dataset.documento = r.documento;
 
       historialCenso.unshift(r);
       historialCenso.splice(8);
       $("#censo-historial").replaceChildren(...historialCenso.map((h) =>
-        el("li", null, [el("b", null, h.documento), el("span", h.habilitado ? "si" : "no", h.habilitado ? "Habilitado" : "No aparece")])
+        el("li", null, [el("b", null, h.nombre ? `${h.documento} · ${h.nombre}` : h.documento), el("span", h.habilitado ? "si" : "no", h.habilitado ? "Habilitado" : "No aparece")])
       ));
       $("#censo-documento").select();
     } catch (err) { aviso(err.message, "error"); }
@@ -571,7 +574,11 @@
       if (soloDigitos($("#f-cedula").value) !== r.documento) return; // la cédula cambió mientras tanto
       pista.hidden = false;
       pista.className = "censo-pista " + (r.habilitado ? "si" : "no");
-      pista.textContent = r.habilitado ? "✓ Está en el censo electoral" : "✗ No aparece en el censo electoral";
+      pista.textContent = r.habilitado
+        ? "✓ Está en el censo electoral" + (r.nombre ? " · " + r.nombre : "") + (r.titulo ? " · " + r.titulo : "")
+        : "✗ No aparece en el censo electoral";
+      // completa el nombre si aún está vacío
+      if (r.habilitado && r.nombre && !estado.editando && !$("#f-nombre").value.trim()) $("#f-nombre").value = r.nombre;
     } catch (_) { pista.hidden = true; }
   }
 

@@ -97,10 +97,15 @@ model Programa {
 }
 
 // Censo electoral de egresados (números de documento habilitados para votar).
-// Se carga con:  npm run importar-censo -- datos/precenso.txt
+// Se carga con:  npm run importar-censo -- "CENSO FINAL ....xlsx"   (o una lista .txt de documentos)
 model Censo {
-  documento String   @id
-  creado    DateTime @default(now())
+  documento  String    @id
+  nombre     String?
+  titulo     String?
+  fechaGrado DateTime? @map("fecha_grado") @db.Date
+  expedida   String?
+  acta       String?
+  creado     DateTime  @default(now())
 
   @@map("censo")
 }
