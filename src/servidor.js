@@ -340,7 +340,7 @@ app.get("/api/censo/:documento", manejar(async (req, res) => {
   if (!/^\d{3,15}$/.test(documento)) throw new ErrorUsuario("Escriba un número de documento válido (solo números).");
   const fila = await prisma.censo.findUnique({
     where: { documento },
-    select: { documento: true, nombre: true, titulo: true, fechaGrado: true },
+    select: { documento: true, nombre: true, titulo: true, fechaGrado: true, acta: true },
   });
   res.json({
     documento,
@@ -348,6 +348,7 @@ app.get("/api/censo/:documento", manejar(async (req, res) => {
     nombre: fila?.nombre || null,
     titulo: fila?.titulo || null,
     fechaGrado: fila?.fechaGrado ? fila.fechaGrado.toISOString().slice(0, 10) : null,
+    acta: fila?.acta || null,
   });
 }));
 

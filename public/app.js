@@ -539,9 +539,11 @@
       $("#censo-detalle").textContent = r.habilitado
         ? (r.nombre ? `${r.documento} · ${r.nombre}` : `El documento ${r.documento} está en el censo electoral.`)
         : `El documento ${r.documento} no está en la lista. Verifique que esté bien escrito.`;
-      const extra = [r.titulo, r.fechaGrado && "Grado: " + r.fechaGrado.split("-").reverse().join("/")].filter(Boolean).join(" · ");
-      $("#censo-extra").textContent = r.habilitado ? extra : "";
-      $("#censo-extra").hidden = !(r.habilitado && extra);
+      $("#censo-extra").textContent = r.habilitado ? (r.titulo || "") : "";
+      $("#censo-extra").hidden = !(r.habilitado && r.titulo);
+      $("#censo-acta").textContent = r.acta || "—";
+      $("#censo-fecha").textContent = r.fechaGrado ? r.fechaGrado.split("-").reverse().join("/") : "—";
+      $("#censo-datos").hidden = !r.habilitado;
       $("#btn-censo-registrar").dataset.documento = r.documento;
 
       historialCenso.unshift(r);
