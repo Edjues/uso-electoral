@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Registro de llamadas</title>
-  <link rel="stylesheet" href="estilos.css?v=8">
+  <link rel="stylesheet" href="estilos.css?v=9">
 </head>
 <body>
   <div id="alerta-servidor" class="alerta" hidden></div>
@@ -20,6 +20,7 @@
     <nav class="pestanas" role="tablist">
       <button type="button" class="pestana activa" role="tab" data-vista="registro" aria-selected="true">Registrar llamada</button>
       <button type="button" class="pestana" role="tab" data-vista="respuestas" aria-selected="false">Respuestas</button>
+      <button type="button" class="pestana" role="tab" data-vista="censo" aria-selected="false">Censo</button>
       <button type="button" class="pestana" role="tab" data-vista="usuarios" aria-selected="false" id="pestana-usuarios" hidden>Usuarios</button>
     </nav>
 
@@ -72,6 +73,7 @@
               <label for="f-cedula">Cédula <b>*</b></label>
               <input id="f-cedula" type="text" name="cedula" inputmode="numeric" required placeholder="Número de documento">
               <small id="historial-cedula" class="pista" hidden></small>
+              <small id="censo-cedula" class="censo-pista" hidden></small>
             </div>
 
             <div class="campo">
@@ -175,6 +177,37 @@
 
         <div id="lista-respuestas" class="respuestas"></div>
         <p id="vacio-respuestas" class="vacio" hidden>No se encontraron respuestas.</p>
+      </div>
+    </section>
+
+    <!-- ================================================= VISTA: CENSO -->
+    <section id="vista-censo" class="vista" hidden>
+      <div class="centrado centrado--estrecho">
+        <div class="encabezado-vista">
+          <div>
+            <h1>Consulta del censo</h1>
+            <p class="sub">Verifique si un número de documento está habilitado para votar. <span id="censo-total"></span></p>
+          </div>
+        </div>
+
+        <form id="form-censo" class="buscador" novalidate autocomplete="off">
+          <input type="search" id="censo-documento" inputmode="numeric" placeholder="Número de documento, sin puntos" aria-label="Número de documento">
+          <button type="submit" class="buscador__boton buscador__boton--grande">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <span>Consultar</span>
+          </button>
+        </form>
+
+        <div id="censo-resultado" class="censo-resultado" hidden aria-live="polite">
+          <div class="censo-resultado__icono" id="censo-icono"></div>
+          <div class="censo-resultado__texto">
+            <strong id="censo-titulo"></strong>
+            <span id="censo-detalle"></span>
+          </div>
+          <button type="button" class="boton boton--sutil boton--chico" id="btn-censo-registrar">Registrar llamada</button>
+        </div>
+
+        <ul id="censo-historial" class="censo-historial"></ul>
       </div>
     </section>
 
@@ -324,6 +357,6 @@
 
   <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

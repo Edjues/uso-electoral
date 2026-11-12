@@ -10,6 +10,7 @@
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",
     "importar-sqlite": "node scripts/importar-sqlite.js",
+    "importar-censo": "node scripts/importar-censo.js",
     "postinstall": "prisma generate",
     "vercel-build": "prisma generate",
     "db:rls": "prisma db execute --file prisma/rls.sql --schema prisma/schema.prisma"

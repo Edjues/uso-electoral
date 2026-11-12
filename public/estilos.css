@@ -1186,3 +1186,58 @@ main { padding: 28px; }
 /* número de caso: antes de guardar solo se indica que se asignará */
 .caso--pendiente { color: var(--texto-3); font-weight: 500; font-size: .88rem; letter-spacing: 0; }
 .ultimo-caso { color: var(--exito); font-weight: 600; }
+
+/* ---------------------------------------------------- consulta del censo */
+.centrado--estrecho { max-width: 640px; }
+
+.censo-resultado {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+}
+.censo-resultado__icono {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+.censo-resultado__texto { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.censo-resultado__texto strong { font-size: 1.02rem; }
+.censo-resultado__texto span { font-size: .86rem; color: var(--texto-2); }
+.censo-resultado.si { border-color: var(--exito); background: var(--exito-suave); }
+.censo-resultado.si .censo-resultado__icono { background: var(--exito); color: #fff; }
+.censo-resultado.si strong { color: var(--exito); }
+.censo-resultado.no { border-color: var(--peligro); background: var(--peligro-suave); }
+.censo-resultado.no .censo-resultado__icono { background: var(--peligro); color: #fff; }
+.censo-resultado.no strong { color: var(--peligro); }
+
+.censo-historial { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 6px; }
+.censo-historial li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: .84rem;
+  color: var(--texto-2);
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--borde);
+}
+.censo-historial li b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--texto); }
+.censo-historial .si { color: var(--exito); }
+.censo-historial .no { color: var(--peligro); }
+
+/* aviso junto a la cédula en el formulario de llamada */
+.censo-pista { font-size: .78rem; font-weight: 600; }
+.censo-pista.si { color: var(--exito); }
+.censo-pista.no { color: var(--peligro); }
+
+@media (max-width: 720px) {
+  .censo-resultado { flex-wrap: wrap; }
+  .censo-resultado #btn-censo-registrar { width: 100%; }
+}

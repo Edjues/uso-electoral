@@ -7,3 +7,4 @@ ALTER TABLE public.intentos_ingreso ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.llamadas         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.respuestas       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.programas        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.censo            ENABLE ROW LEVEL SECURITY;

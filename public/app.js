@@ -280,6 +280,7 @@
     $$(".vista").forEach((v) => (v.hidden = v.id !== "vista-" + nombre));
     cerrarTodos(null);
     if (nombre === "respuestas") $("#buscar-respuestas").focus();
+    if (nombre === "censo") { $("#censo-documento").focus(); cargarTotalCenso(); }
     if (nombre === "usuarios" && recargar) cargarUsuarios();
     try { localStorage.setItem("vista", nombre); } catch (_) { /* sin almacenamiento */ }
   }
@@ -394,6 +395,7 @@
     $("#etiqueta-edicion").hidden = true;
     $("#btn-guardar").textContent = "Guardar llamada";
     $("#historial-cedula").hidden = true;
+    $("#censo-cedula").hidden = true;
     mostrarSiguienteCaso();
     pintarLlamadas();
   }
@@ -452,6 +454,7 @@
     $("#etiqueta-edicion").hidden = false;
     $("#btn-guardar").textContent = "Guardar cambios";
     actualizarHistorialCedula();
+    avisoCensoCedula();
     pintarLlamadas();
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -493,6 +496,84 @@
     }
   }
   $("#f-cedula").addEventListener("change", actualizarHistorialCedula);
+  $("#f-cedula").addEventListener("change", avisoCensoCedula);
+
+  // ============================================================ censo electoral
+  const cacheCenso = new Map();
+  const soloDigitos = (t) => String(t || "").replace(/[\s.,-]/g, "");
+
+  async function consultarCenso(documento) {
+    if (cacheCenso.has(documento)) return cacheCenso.get(documento);
+    const r = await api("/api/censo/" + encodeURIComponent(documento));
+    cacheCenso.set(r.documento, r);
+    return r;
+  }
+
+  let totalCensoCargado = false;
+  async function cargarTotalCenso() {
+    if (totalCensoCargado) return;
+    try {
+      const { total } = await api("/api/censo");
+      totalCensoCargado = true;
+      $("#censo-total").textContent = total
+        ? `${total.toLocaleString("es-CO")} documentos cargados.`
+        : "El censo aún no se ha cargado.";
+    } catch (_) { /* no es crítico */ }
+  }
+
+  const ICONO_SI = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  const ICONO_NO = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+  const historialCenso = [];
+
+  $("#form-censo").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const documento = soloDigitos($("#censo-documento").value);
+    if (!/^\d{3,15}$/.test(documento)) { aviso("Escriba un número de documento válido (solo números)", "error"); return; }
+    try {
+      const r = await consultarCenso(documento);
+      const caja = $("#censo-resultado");
+      caja.hidden = false;
+      caja.className = "censo-resultado " + (r.habilitado ? "si" : "no");
+      $("#censo-icono").replaceChildren(svg(r.habilitado ? ICONO_SI : ICONO_NO));
+      $("#censo-titulo").textContent = r.habilitado ? "Habilitado para votar" : "No aparece en el censo";
+      $("#censo-detalle").textContent = r.habilitado
+        ? `El documento ${r.documento} está en el censo electoral.`
+        : `El documento ${r.documento} no está en la lista. Verifique que esté bien escrito.`;
+      $("#btn-censo-registrar").dataset.documento = r.documento;
+
+      historialCenso.unshift(r);
+      historialCenso.splice(8);
+      $("#censo-historial").replaceChildren(...historialCenso.map((h) =>
+        el("li", null, [el("b", null, h.documento), el("span", h.habilitado ? "si" : "no", h.habilitado ? "Habilitado" : "No aparece")])
+      ));
+      $("#censo-documento").select();
+    } catch (err) { aviso(err.message, "error"); }
+  });
+
+  // pasa el documento consultado al formulario de llamada
+  $("#btn-censo-registrar").addEventListener("click", () => {
+    const documento = $("#btn-censo-registrar").dataset.documento;
+    mostrarVista("registro");
+    if (!estado.editando && documento) {
+      $("#f-cedula").value = documento;
+      $("#f-cedula").dispatchEvent(new Event("change"));
+      $("#f-nombre").focus();
+    }
+  });
+
+  // al escribir la cédula de una llamada, indica si está en el censo
+  async function avisoCensoCedula() {
+    const pista = $("#censo-cedula");
+    const documento = soloDigitos($("#f-cedula").value);
+    if (!/^\d{3,15}$/.test(documento)) { pista.hidden = true; return; }
+    try {
+      const r = await consultarCenso(documento);
+      if (soloDigitos($("#f-cedula").value) !== r.documento) return; // la cédula cambió mientras tanto
+      pista.hidden = false;
+      pista.className = "censo-pista " + (r.habilitado ? "si" : "no");
+      pista.textContent = r.habilitado ? "✓ Está en el censo electoral" : "✗ No aparece en el censo electoral";
+    } catch (_) { pista.hidden = true; }
+  }
 
   // ============================================================ lista de llamadas
   // agrega o reemplaza una llamada en la lista local, manteniendo el orden (más recientes primero)
@@ -1062,7 +1143,7 @@
 
     let vistaInicial = "registro";
     try { vistaInicial = localStorage.getItem("vista") || "registro"; } catch (_) { /* nada */ }
-    const permitidas = yo.rol === "ADMIN" ? ["registro", "respuestas", "usuarios"] : ["registro", "respuestas"];
+    const permitidas = yo.rol === "ADMIN" ? ["registro", "respuestas", "censo", "usuarios"] : ["registro", "respuestas", "censo"];
     mostrarVista(permitidas.includes(vistaInicial) ? vistaInicial : "registro", false);
   }
   iniciar();

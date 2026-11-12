@@ -327,6 +327,21 @@ async function verificarProgramaUnico(nombre, idActual) {
   }
 }
 
+// ------------------------------------------------------------------ censo electoral
+// Consulta uno a uno: la lista completa nunca se envía a la página.
+const limpiarDocumento = (v) => String(v ?? "").replace(/[\s.,-]/g, "");
+
+app.get("/api/censo", manejar(async (_req, res) => {
+  res.json({ total: await prisma.censo.count() });
+}));
+
+app.get("/api/censo/:documento", manejar(async (req, res) => {
+  const documento = limpiarDocumento(req.params.documento);
+  if (!/^\d{3,15}$/.test(documento)) throw new ErrorUsuario("Escriba un número de documento válido (solo números).");
+  const fila = await prisma.censo.findUnique({ where: { documento }, select: { documento: true } });
+  res.json({ documento, habilitado: !!fila });
+}));
+
 // Llamadas que puede ver quien consulta: el trabajador solo las suyas; el administrador todas,
 // o las de un trabajador si pide ?trabajador=<id> (o ?trabajador=sin para las que no tienen dueño).
 function filtroLlamadas(req) {
