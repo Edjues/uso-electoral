@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Registro de llamadas</title>
-  <link rel="stylesheet" href="estilos.css?v=6">
+  <link rel="stylesheet" href="estilos.css?v=8">
 </head>
 <body>
   <div id="alerta-servidor" class="alerta" hidden></div>
@@ -64,7 +64,8 @@
 
             <div class="campo">
               <span class="campo__etiqueta">Caso N° <em class="auto">automático</em></span>
-              <div class="caso" id="caso-numero">—</div>
+              <div class="caso caso--pendiente" id="caso-numero">Se asigna al guardar</div>
+              <small class="ayuda ultimo-caso" id="ultimo-caso" hidden></small>
             </div>
 
             <div class="campo">
@@ -323,6 +324,6 @@
 
   <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

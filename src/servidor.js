@@ -13,8 +13,20 @@ const RAIZ = path.join(__dirname, "..");
 const VISTAS = path.join(RAIZ, "vistas");  // páginas que pasan por la verificación de sesión
 const PUBLICO = path.join(RAIZ, "public"); // estilos y scripts (en Vercel los sirve su CDN)
 
+// Conexión a la base de datos:
+//  - En Vercel (muchas instancias cortas) se usa el pooler de transacciones: DATABASE_URL (puerto 6543).
+//  - En el PC el servidor queda encendido, así que conviene la conexión de sesión (DIRECT_URL, puerto 5432):
+//    cada consulta necesita menos idas y vueltas a Supabase y se pueden hacer varias a la vez.
+function urlBaseDatos() {
+  if (process.env.VERCEL || !process.env.DIRECT_URL) return process.env.DATABASE_URL;
+  const u = new URL(process.env.DIRECT_URL);
+  if (!u.searchParams.has("connection_limit")) u.searchParams.set("connection_limit", "5");
+  return u.toString();
+}
+
 // En Vercel se reutiliza el cliente entre peticiones de la misma instancia
-const prisma = globalThis.__prisma || (globalThis.__prisma = new PrismaClient());
+const prisma = globalThis.__prisma ||
+  (globalThis.__prisma = new PrismaClient({ datasources: { db: { url: urlBaseDatos() } } }));
 const app = express();
 
 app.disable("x-powered-by");
@@ -36,8 +48,6 @@ app.use(auth.cargarUsuario(prisma));
 // ------------------------------------------------------------------ utilidades
 const texto = (v) => String(v ?? "").trim().slice(0, 5000);
 const aBool = (v) => [true, 1, "1", "true", "si", "sí"].includes(v);
-const pad = (n) => String(n).padStart(4, "0");
-const numeroCaso = (id, fecha) => `${String(fecha || new Date().getFullYear()).slice(0, 4)}-${pad(id)}`;
 const normalizar = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
 class ErrorUsuario extends Error {
@@ -67,7 +77,11 @@ app.get(["/", "/index.html"], (req, res) => {
   if (!req.usuario || req.usuario.debeCambiarClave) return res.redirect("/login");
   res.sendFile(path.join(VISTAS, "index.html"));
 });
-app.use(express.static(PUBLICO, { index: false, etag: false }));
+// estilos y scripts: el navegador guarda una copia y solo pregunta si cambió (respuesta 304, sin descargar)
+app.use(express.static(PUBLICO, {
+  index: false,
+  setHeaders: (res) => res.set("Cache-Control", "no-cache"),
+}));
 
 // ------------------------------------------------------------------ sesión
 app.post("/api/login", manejar(async (req, res) => {
@@ -123,6 +137,25 @@ app.post("/api/cambiar-clave", manejar(async (req, res) => {
 
 // de aquí en adelante todo requiere sesión
 app.use(["/api", "/exportar"], auth.requiereSesion);
+
+// Todo lo que la página necesita al abrir, en una sola petición (una sola verificación de sesión
+// y las consultas en paralelo), en lugar de 5 peticiones separadas.
+app.get("/api/inicio", manejar(async (req, res) => {
+  const { llamadas, respuestas, programas } = RECURSOS;
+  const [ll, rs, ps, us] = await Promise.all([
+    prisma.llamada.findMany({ where: filtroLlamadas(req), orderBy: llamadas.orden, include: llamadas.incluir }),
+    prisma.respuesta.findMany({ orderBy: respuestas.orden }),
+    prisma.programa.findMany({ orderBy: programas.orden }),
+    req.usuario.rol === "ADMIN" ? prisma.usuario.findMany({ orderBy: [{ rol: "asc" }, { nombre: "asc" }] }) : null,
+  ]);
+  res.json({
+    yo: auth.publico(req.usuario),
+    llamadas: ll.map(llamadas.aJSON),
+    respuestas: rs.map(respuestas.aJSON),
+    programas: ps.map(programas.aJSON),
+    usuarios: us ? us.map(auth.publico) : [],
+  });
+}));
 
 // ------------------------------------------------------------------ usuarios (solo administrador)
 const ROLES = ["ADMIN", "TRABAJADOR"];
@@ -294,13 +327,6 @@ async function verificarProgramaUnico(nombre, idActual) {
   }
 }
 
-app.get("/api/siguiente-caso", manejar(async (_req, res) => {
-  // consulta el contador de la tabla sin consumirlo
-  const [fila] = await prisma.$queryRaw`
-    SELECT pg_sequence_last_value(pg_get_serial_sequence('llamadas', 'id')::regclass) AS ultimo`;
-  res.json({ caso: numeroCaso(Number(fila?.ultimo ?? 0) + 1) });
-}));
-
 // Llamadas que puede ver quien consulta: el trabajador solo las suyas; el administrador todas,
 // o las de un trabajador si pide ?trabajador=<id> (o ?trabajador=sin para las que no tienen dueño).
 function filtroLlamadas(req) {
@@ -330,14 +356,22 @@ app.post("/api/:recurso", manejar(async (req, res) => {
   const datos = limpiar(cfg, req.body, false);
   let fila;
   if (req.params.recurso === "llamadas") {
-    fila = await prisma.$transaction(async (tx) => {
-      const nueva = await tx.llamada.create({ data: { ...datos, usuarioId: req.usuario.id } });
-      return tx.llamada.update({
-        where: { id: nueva.id },
-        data: { caso: numeroCaso(nueva.id, nueva.fechaHora) },
-        include: cfg.incluir,
-      });
-    });
+    // Una sola instrucción: toma el siguiente número del contador de PostgreSQL (nunca se repite,
+    // aunque varias personas guarden a la vez) y con él arma el caso AÑO-0001.
+    // Los valores van como parámetros, nunca pegados al texto SQL.
+    const d = datos;
+    const anio = String(d.fechaHora).slice(0, 4);
+    const [nueva] = await prisma.$queryRaw`
+      WITH n AS (SELECT nextval(pg_get_serial_sequence('llamadas', 'id')) AS id)
+      INSERT INTO llamadas (id, caso, fecha_hora, nombre, cedula, programa, solicitud, respuesta,
+                            observacion, resuelto, usuario_id, actualizado)
+      SELECT n.id, ${anio}::text || '-' || lpad(n.id::text, greatest(4, length(n.id::text)), '0'),
+             ${d.fechaHora}::text, ${d.nombre}::text, ${d.cedula}::text, ${d.programa}::text,
+             ${d.solicitud}::text, ${d.respuesta}::text, ${d.observacion}::text, ${d.resuelto}::boolean,
+             ${req.usuario.id}::int, now()
+      FROM n
+      RETURNING id, caso`;
+    fila = { ...d, id: Number(nueva.id), caso: nueva.caso, usuarioId: req.usuario.id, usuario: { nombre: req.usuario.nombre } };
   } else {
     if (req.params.recurso === "programas") await verificarProgramaUnico(datos.nombre);
     fila = await cfg.modelo().create({ data: datos });

@@ -2,8 +2,9 @@
 // Después de cambiarlo, ejecute:  npm run db:push
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"] // "native" = este PC; rhel = servidores de Vercel
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"] // "native" = este PC; rhel = servidores de Vercel
+  previewFeatures = ["relationJoins"] // trae datos relacionados en una sola consulta (JOIN)
 }
 
 datasource db {
@@ -29,6 +30,8 @@ model Llamada {
   actualizado DateTime @updatedAt
 
   @@index([cedula])
+  @@index([fechaHora])            // orden de la lista (más recientes primero)
+  @@index([usuarioId, fechaHora]) // "mis llamadas" de cada trabajador
   @@map("llamadas")
 }
 

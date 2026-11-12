@@ -1182,3 +1182,7 @@ main { padding: 28px; }
 .filtro-trabajador select:hover { border-color: var(--borde-fuerte); }
 .filtro-trabajador select:focus { outline: none; border-color: var(--acento); box-shadow: var(--foco); }
 .filtro-trabajador.activo select { border-color: var(--acento); background: var(--acento-suave); color: var(--acento); font-weight: 600; }
+
+/* número de caso: antes de guardar solo se indica que se asignará */
+.caso--pendiente { color: var(--texto-3); font-weight: 500; font-size: .88rem; letter-spacing: 0; }
+.ultimo-caso { color: var(--exito); font-weight: 600; }

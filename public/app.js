@@ -271,7 +271,7 @@
   });
 
   // ============================================================ pestañas
-  function mostrarVista(nombre) {
+  function mostrarVista(nombre, recargar = true) {
     $$(".pestana").forEach((b) => {
       const activa = b.dataset.vista === nombre;
       b.classList.toggle("activa", activa);
@@ -280,7 +280,7 @@
     $$(".vista").forEach((v) => (v.hidden = v.id !== "vista-" + nombre));
     cerrarTodos(null);
     if (nombre === "respuestas") $("#buscar-respuestas").focus();
-    if (nombre === "usuarios") cargarUsuarios();
+    if (nombre === "usuarios" && recargar) cargarUsuarios();
     try { localStorage.setItem("vista", nombre); } catch (_) { /* sin almacenamiento */ }
   }
   $$(".pestana").forEach((b) => b.addEventListener("click", () => mostrarVista(b.dataset.vista)));
@@ -346,14 +346,19 @@
     campoFecha.closest(".campo").classList.remove("invalido");
   });
 
-  async function mostrarSiguienteCaso() {
+  // El número de caso lo asigna la base de datos en el momento de guardar, así nunca se repite
+  // aunque varias personas guarden a la vez. Antes de guardar no se muestra un número "adivinado".
+  function mostrarSiguienteCaso() {
     const n = $("#caso-numero");
-    n.textContent = "—";
-    n.title = "Se asigna automáticamente al guardar";
-    try {
-      const { caso } = await api("/api/siguiente-caso");
-      if (!estado.editando) n.textContent = caso;
-    } catch (_) { /* se mostrará al guardar */ }
+    n.textContent = "Se asigna al guardar";
+    n.title = "El número se asigna automáticamente al guardar y nunca se repite";
+    n.classList.add("caso--pendiente");
+  }
+
+  function mostrarUltimoCaso(caso) {
+    const u = $("#ultimo-caso");
+    u.hidden = !caso;
+    u.textContent = caso ? `Último guardado: caso ${caso}` : "";
   }
 
   const OBLIGATORIOS = { fecha_hora: campoFecha, cedula: $("#f-cedula"), nombre: $("#f-nombre"), solicitud: $("#sel-solicitud") };
@@ -413,8 +418,10 @@
         guardada = await api("/api/llamadas", { method: "POST", body: d });
         aviso(`Llamada guardada · Caso ${guardada.caso}`, "exito");
       }
-      await cargarLlamadas();
+      // se actualiza la lista con lo que devolvió el servidor, sin volver a descargarla toda
+      ponerLlamada(guardada);
       limpiarFormulario();
+      mostrarUltimoCaso(guardada.caso);
       $("#f-cedula").focus();
     } catch (err) {
       aviso(err.message, "error");
@@ -439,6 +446,8 @@
     fijarResuelto(ll.resuelto);
     mostrarResolucion(estado.respuestas.find((r) => r.pregunta === ll.solicitud));
     $("#caso-numero").textContent = ll.caso;
+    $("#caso-numero").classList.remove("caso--pendiente");
+    mostrarUltimoCaso(null);
     $("#titulo-form").textContent = "Editar llamada";
     $("#etiqueta-edicion").hidden = false;
     $("#btn-guardar").textContent = "Guardar cambios";
@@ -451,8 +460,10 @@
     if (!confirm(`¿Eliminar el caso ${ll.caso} de ${ll.nombre}? Esta acción no se puede deshacer.`)) return;
     try {
       await api("/api/llamadas/" + ll.id, { method: "DELETE" });
+      estado.llamadas = estado.llamadas.filter((x) => x.id !== ll.id);
       if (estado.editando === ll.id) limpiarFormulario();
-      await cargarLlamadas();
+      pintarFiltroTrabajador();
+      pintarLlamadas();
       aviso("Llamada eliminada");
     } catch (err) { aviso(err.message, "error"); }
   }
@@ -484,8 +495,11 @@
   $("#f-cedula").addEventListener("change", actualizarHistorialCedula);
 
   // ============================================================ lista de llamadas
-  async function cargarLlamadas() {
-    estado.llamadas = await api("/api/llamadas");
+  // agrega o reemplaza una llamada en la lista local, manteniendo el orden (más recientes primero)
+  function ponerLlamada(ll) {
+    estado.llamadas = [ll, ...estado.llamadas.filter((x) => x.id !== ll.id)].sort((a, b) =>
+      b.fecha_hora < a.fecha_hora ? -1 : b.fecha_hora > a.fecha_hora ? 1 : b.id - a.id
+    );
     pintarFiltroTrabajador();
     pintarLlamadas();
   }
@@ -504,7 +518,7 @@
     for (const ll of estado.llamadas) cuenta.set(ll.usuarioId ?? "sin", (cuenta.get(ll.usuarioId ?? "sin") || 0) + 1);
     const opcion = (valor, texto) => { const o = el("option", null, texto); o.value = valor; return o; };
     const opciones = [opcion("", `Todos los trabajadores (${estado.llamadas.length})`)];
-    for (const u of [...estado.usuarios].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))) {
+    for (const u of [...estado.usuarios].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }))) {
       opciones.push(opcion(String(u.id), `${u.nombre}${u.activo ? "" : " (inactivo)"} · ${cuenta.get(u.id) || 0}`));
     }
     if (cuenta.get("sin")) opciones.push(opcion("sin", `Sin asignar · ${cuenta.get("sin")}`));
@@ -1021,14 +1035,26 @@
       alerta("Está abriendo el archivo directamente. Abra la página con iniciar.bat.");
       return;
     }
-    let yo;
+    // una sola petición trae el usuario y todos los datos de la página
+    let datos;
     try {
-      ({ usuario: yo } = await api("/api/yo"));
+      datos = await api("/api/inicio");
     } catch (err) {
       alerta(err.message);
       return;
     }
+    const yo = datos.yo;
     pintarUsuarioActual(yo);
+    estado.llamadas = datos.llamadas;
+    estado.respuestas = datos.respuestas;
+    estado.programas = datos.programas;
+    estado.usuarios = datos.usuarios;
+    pintarRespuestas();
+    selSolicitud.refrescar();
+    selPrograma.refrescar();
+    if (yo.rol === "ADMIN") pintarUsuarios();
+    pintarFiltroTrabajador();
+    pintarLlamadas();
     if (yo.rol !== "ADMIN") {
       $("#titulo-llamadas").textContent = "Mis llamadas";
       $("#btn-exportar").title = "Descargar mis llamadas en Excel";
@@ -1037,13 +1063,7 @@
     let vistaInicial = "registro";
     try { vistaInicial = localStorage.getItem("vista") || "registro"; } catch (_) { /* nada */ }
     const permitidas = yo.rol === "ADMIN" ? ["registro", "respuestas", "usuarios"] : ["registro", "respuestas"];
-    mostrarVista(permitidas.includes(vistaInicial) ? vistaInicial : "registro");
-
-    try {
-      await Promise.all([cargarLlamadas(), cargarRespuestas(), cargarProgramas(), cargarUsuarios()]);
-    } catch (err) {
-      alerta(err.message);
-    }
+    mostrarVista(permitidas.includes(vistaInicial) ? vistaInicial : "registro", false);
   }
   iniciar();
 })();
