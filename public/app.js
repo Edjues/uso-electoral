@@ -542,6 +542,7 @@
       $("#censo-extra").textContent = r.habilitado ? (r.titulo || "") : "";
       $("#censo-extra").hidden = !(r.habilitado && r.titulo);
       $("#censo-acta").textContent = r.acta || "—";
+      $("#censo-expedida").textContent = r.expedida || "Sin dato";
       $("#censo-fecha").textContent = r.fechaGrado ? r.fechaGrado.split("-").reverse().join("/") : "—";
       $("#censo-datos").hidden = !r.habilitado;
       $("#btn-censo-registrar").dataset.documento = r.documento;
@@ -666,7 +667,7 @@
             ll.atendio ? el("span", "llamada__atendio", "Atendió: " + ll.atendio) : null,
             el("div", "llamada__acciones", [
               iconoBoton("editar", "Editar", () => editarLlamada(ll)),
-              iconoBoton("borrar", "Eliminar", () => borrarLlamada(ll)),
+              esAdmin() ? iconoBoton("borrar", "Eliminar", () => borrarLlamada(ll)) : null,
             ]),
           ]),
         ]);
